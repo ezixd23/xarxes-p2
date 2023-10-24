@@ -72,6 +72,7 @@ def download_file(filename):
 
         if opcode == CODE_DATA and block_num == curr_block: 
             file_content += file_block_data
+            save_file("downloaded.txt", file_content)
             send_ack(client_socket, block_num)
             curr_block += 1
         elif opcode == CODE_ERR:
@@ -82,5 +83,10 @@ def download_file(filename):
 
     print(file_content) # TODO: Guardar archivo
 
+
+def save_file(filename, data):
+    with open(filename, 'wb') as file:
+        file.write(data.encode('utf-8'))
+    file.close()
 
 download_file("data.txt")
