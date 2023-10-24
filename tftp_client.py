@@ -1,4 +1,5 @@
 import socket
+import struct
 
 CODE_RRQ = 1
 CODE_WRQ = 2
@@ -6,64 +7,74 @@ CODE_DATA = 3
 CODE_ACK = 4
 CODE_ERR = 5
 
-def send_udp_packet(ip, data):
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+IP = "127.0.0.1:6969"
+
+def send_udp_packet(client_socket, data, ip=IP):
     parsed_ip = ip.split(":")
     client_socket.sendto(data, (parsed_ip[0], int(parsed_ip[1])))
-    client_socket.close()
 
-def send_request(ip, opcode, filename, mode='octet'):
-    pass
+def send_request(client_socket, opcode, filename, mode='octet'):
+    data = struct.pack('!H', opcode) + filename.encode('utf-8') + b'\0' + mode.encode('utf-8') + b'\0'
+    send_udp_packet(client_socket, data)
 
 # Funciones para enviar paquetes
-def send_read_request(ip, filename):
-    send_request(ip, 'rrq', filename)
+def send_read_request(client_socket, filename):
+    send_request(client_socket, CODE_RRQ, filename)
 
-def send_write_request(ip, filename):
-    send_request(ip, 'wrq', filename)
+def send_write_request(client_socket, filename):
+    send_request(client_socket, CODE_WRQ, filename)
 
-def send_data(ip, block_num, data):
+def send_data(client_socket, block_num, data):
     pass
 
-def send_ack(ip, block_num):
-    pass
+def send_ack(client_socket, block_num):
+    print(f"sending ack {str(block_num)}")
+    data = struct.pack('!H', CODE_ACK) + struct.pack('!H', block_num)
+    send_udp_packet(client_socket, data)
 
-def send_error(ip, error_num, error_msg):
+def send_error(client_socket, error_num, error_msg):
     pass
 
 
 
 # Funcion para parsear paquetes recividos
-def parse_packet(data_recv):
-    opcode = 0 # Los dos primeros bytes
-    block_num = -1 # Los 2 bytes siguientes
-    data = "" # en caso de DATA, lo que quede hasta el final
-    
-    return opcode, block_num, data
+def parse_header(data_recv):
+    opcode = struct.unpack('!H', data_recv[:2])[0]
+    block_num = struct.unpack('!H', data_recv[2:4])[0]
+
+    return opcode, block_num
+
+def parse_data(data):
+    return str(struct.unpack(f"{len(data)}s", data)[0])[2:-1]
 
 
-
-def create_listen_socket(ip):
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    parsed_ip = ip.split(":")
-    server_socket.bind((parsed_ip[0], int(parsed_ip[1])))
-    return server_socket
-
-def download_file(ip, filename):
+def download_file(filename):
     file_content = ""
 
-    listen_socket = create_listen_socket(ip) # creamos un socket para escuchar
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_socket.settimeout(1)
 
-    send_read_request(ip, filename) # enviamos el primer paquete para pedir permiso para leer un archivo
+    send_read_request(client_socket, filename) # enviamos el primer paquete para pedir permiso para leer un archivo
+
+    curr_block = 1
     while True:
-        received_data, client_address = listen_socket.recvfrom() # esperamos respuesta del servidor
+        received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
 
-        opcode, block_num, data = parse_packet(received_data) # parseamos el paquete recivido
+        opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
+        file_block_data = parse_data(received_data[4:])
+        print(f"block received {opcode} {block_num} {len(file_block_data)}")
 
-        if opcode == CODE_DATA: 
-            file_content += data
-            send_ack(ip, block_num)
+        if opcode == CODE_DATA and block_num == curr_block: 
+            file_content += file_block_data
+            send_ack(client_socket, block_num)
+            curr_block += 1
         elif opcode == CODE_ERR:
             print("pues ha dao error")
 
-        # sabemos que ha terminado cuando la data son < 512 bytes
+        if len(file_block_data) < 512:
+            break
+
+    print(file_content)
+
+
+download_file("data.txt")
