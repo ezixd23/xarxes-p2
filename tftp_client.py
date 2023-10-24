@@ -32,10 +32,6 @@ def send_ack(client_socket, block_num):
     data = struct.pack('!H', CODE_ACK) + struct.pack('!H', block_num)
     send_udp_packet(client_socket, data)
 
-def send_error(client_socket, error_num, error_msg):
-    pass
-
-
 
 # Funcion para parsear paquetes recividos
 def parse_header(data_recv):
