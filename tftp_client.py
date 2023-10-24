@@ -1,5 +1,6 @@
 import socket
 import struct
+import sys
 
 CODE_RRQ = 1
 CODE_WRQ = 2
@@ -28,7 +29,6 @@ def send_data(client_socket, block_num, data):
     pass
 
 def send_ack(client_socket, block_num):
-    print(f"sending ack {str(block_num)}")
     data = struct.pack('!H', CODE_ACK) + struct.pack('!H', block_num)
     send_udp_packet(client_socket, data)
 
@@ -45,7 +45,13 @@ def parse_header(data_recv):
     return opcode, block_num
 
 def parse_data(data):
-    return str(struct.unpack(f"{len(data)}s", data)[0])[2:-1]
+    return struct.unpack(f"{len(data)}s", data)[0].decode('utf-8')
+
+def handle_error_packet(packet):
+    error_code = struct.unpack('!H', packet[2:4])[0]
+    error_message = packet[4:].decode('utf-8')
+    print(f'Error {error_code}: {error_message}')
+    sys.exit(1)
 
 
 def download_file(filename):
@@ -69,12 +75,12 @@ def download_file(filename):
             send_ack(client_socket, block_num)
             curr_block += 1
         elif opcode == CODE_ERR:
-            print("pues ha dao error")
+            handle_error_packet(received_data)
 
         if len(file_block_data) < 512:
             break
 
-    print(file_content)
+    print(file_content) # TODO: Guardar archivo
 
 
 download_file("data.txt")
