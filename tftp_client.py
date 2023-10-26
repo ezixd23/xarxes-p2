@@ -1,6 +1,7 @@
 import socket
 import struct
 import sys
+import math
 
 CODE_RRQ = 1
 CODE_WRQ = 2
@@ -12,6 +13,7 @@ IP = "127.0.0.1:6969"
 
 def send_udp_packet(client_socket, data, ip=IP):
     parsed_ip = ip.split(":")
+    print(f"sending packet: {data}")
     client_socket.sendto(data, (parsed_ip[0], int(parsed_ip[1])))
 
 def send_request(client_socket, opcode, filename, mode='octet'):
@@ -25,8 +27,9 @@ def send_read_request(client_socket, filename):
 def send_write_request(client_socket, filename):
     send_request(client_socket, CODE_WRQ, filename)
 
-def send_data(client_socket, block_num, data):
-    pass
+def send_data(client_socket, block_num, block_data):
+    data = struct.pack('!H', CODE_DATA) + struct.pack('!H', block_num) + block_data.encode('utf-8')
+    send_udp_packet(client_socket, data)
 
 def send_ack(client_socket, block_num):
     data = struct.pack('!H', CODE_ACK) + struct.pack('!H', block_num)
@@ -47,7 +50,7 @@ def handle_error_packet(packet):
     error_code = struct.unpack('!H', packet[2:4])[0]
     error_message = packet[4:].decode('utf-8')
     print(f'Error {error_code}: {error_message}')
-    sys.exit(1)
+    #sys.exit(1)
 
 
 def download_file(filename):
@@ -79,10 +82,48 @@ def download_file(filename):
 
     print(file_content) # TODO: Guardar archivo
 
+def write_file(filename, file_content):
+    file_content_segments = math.ceil(len(file_content)/512) 
+    
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_socket.settimeout(3)
+
+    send_write_request(client_socket, filename) # enviamos el primer paquete para pedir permiso para escribir un archivo
+
+    curr_block = 0
+    resend_attempts = 0
+    while curr_block <= file_content_segments:
+        received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
+        opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
+        print(f"ack received {opcode} {block_num}")
+
+        if opcode == CODE_ACK and block_num == curr_block:
+            curr_block += 1
+            send_data(client_socket, curr_block, file_content[(curr_block-1)*512:curr_block*512])
+        elif opcode == CODE_ERR:
+            handle_error_packet(received_data)
+            if resend_attempts < 1:
+                print("resending packet")
+                send_data(client_socket, curr_block, file_content[(curr_block-1)*512:curr_block*512])
+                resend_attempts += 1
+            else:
+                sys.exit(1)
+            
+
 
 def save_file(filename, data):
     with open(filename, 'wb') as file:
         file.write(data.encode('utf-8'))
     file.close()
 
-download_file("data.txt")
+def read_file(filename):
+    content = ""
+    with open(filename, 'r') as file:
+        content = file.read() 
+    file.close()
+    return content
+
+#download_file("data.txt")
+file_content = read_file("data.txt")
+write_file("example.txt", file_content)
+
