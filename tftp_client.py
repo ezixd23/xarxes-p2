@@ -28,7 +28,7 @@ def send_write_request(client_socket, filename):
     send_request(client_socket, CODE_WRQ, filename)
 
 def send_data(client_socket, block_num, block_data):
-    data = struct.pack('!H', CODE_DATA) + struct.pack('!H', block_num) + block_data.encode('utf-8')
+    data = struct.pack('!H', CODE_DATA) + struct.pack('!H', block_num) + struct.pack(f"{len(block_data)}s", block_data.encode('utf-8'))
     send_udp_packet(client_socket, data)
 
 def send_ack(client_socket, block_num):
@@ -94,17 +94,18 @@ def write_file(filename, file_content):
     resend_attempts = 0
     while curr_block <= file_content_segments:
         received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
+        print(f"ack? {received_data}")
         opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
         print(f"ack received {opcode} {block_num}")
 
         if opcode == CODE_ACK and block_num == curr_block:
+            send_data(client_socket, curr_block, file_content[(curr_block)*512:curr_block+1*512])
             curr_block += 1
-            send_data(client_socket, curr_block, file_content[(curr_block-1)*512:curr_block*512])
         elif opcode == CODE_ERR:
             handle_error_packet(received_data)
             if resend_attempts < 1:
                 print("resending packet")
-                send_data(client_socket, curr_block, file_content[(curr_block-1)*512:curr_block*512])
+                send_data(client_socket, curr_block, file_content[(curr_block)*512:curr_block+1*512])
                 resend_attempts += 1
             else:
                 sys.exit(1)
