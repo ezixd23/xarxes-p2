@@ -13,7 +13,6 @@ IP = "127.0.0.1:6969"
 
 def send_udp_packet(client_socket, data, ip=IP):
     parsed_ip = ip.split(":")
-    print(f"sending packet: {data}")
     client_socket.sendto(data, (parsed_ip[0], int(parsed_ip[1])))
 
 def send_request(client_socket, opcode, filename, mode='octet'):
@@ -29,6 +28,7 @@ def send_write_request(client_socket, filename):
 
 def send_data(client_socket, block_num, block_data):
     data = struct.pack('!H', CODE_DATA) + struct.pack('!H', block_num) + struct.pack(f"{len(block_data)}s", block_data.encode('utf-8'))
+    print(f"sending data, num={block_num}")
     send_udp_packet(client_socket, data)
 
 def send_ack(client_socket, block_num):
@@ -91,25 +91,23 @@ def write_file(filename, file_content):
     send_write_request(client_socket, filename) # enviamos el primer paquete para pedir permiso para escribir un archivo
 
     curr_block = 0
-    resend_attempts = 0
     while curr_block <= file_content_segments:
-        received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
-        print(f"ack? {received_data}")
-        opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
-        print(f"ack received {opcode} {block_num}")
+        opcode, block_num, isfake = 0, 0, False
+        try:
+            received_data = "".encode()
+            while received_data == "".encode():
+                received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
+            opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
+        except:
+            opcode, block_num = 4, curr_block
+            isfake = True
+        print(f"ack received {opcode} {block_num} {'*' if isfake else ''}")
 
         if opcode == CODE_ACK and block_num == curr_block:
-            send_data(client_socket, curr_block, file_content[(curr_block)*512:curr_block+1*512])
             curr_block += 1
+            send_data(client_socket, curr_block, file_content[(curr_block)*512:(curr_block+1)*512])
         elif opcode == CODE_ERR:
             handle_error_packet(received_data)
-            if resend_attempts < 1:
-                print("resending packet")
-                send_data(client_socket, curr_block, file_content[(curr_block)*512:curr_block+1*512])
-                resend_attempts += 1
-            else:
-                sys.exit(1)
-            
 
 
 def save_file(filename, data):
