@@ -91,12 +91,11 @@ def write_file(filename, file_content):
     send_write_request(client_socket, filename) # enviamos el primer paquete para pedir permiso para escribir un archivo
 
     curr_block = 0
+    is_first = True
     while curr_block <= file_content_segments:
         opcode, block_num, isfake = 0, 0, False
         try:
-            received_data = "".encode()
-            while received_data == "".encode():
-                received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
+            received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
             opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
         except:
             opcode, block_num = 4, curr_block
@@ -104,7 +103,10 @@ def write_file(filename, file_content):
         print(f"ack received {opcode} {block_num} {'*' if isfake else ''}")
 
         if opcode == CODE_ACK and block_num == curr_block:
-            curr_block += 1
+            if not is_first:
+                curr_block += 1
+            else:
+                is_first = False
             send_data(client_socket, curr_block, file_content[(curr_block)*512:(curr_block+1)*512])
         elif opcode == CODE_ERR:
             handle_error_packet(received_data)
