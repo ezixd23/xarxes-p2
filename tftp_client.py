@@ -69,12 +69,12 @@ def download_file(filename):
 
         opcode, block_num = parse_header(received_data) # parseamos el paquete recivido
         file_block_data = parse_data(received_data[4:])
-        print(f"block received {opcode} {block_num} {len(file_block_data)}")
+        print(f"block received #{block_num} {len(file_block_data)}")
 
         if opcode == CODE_DATA and block_num == curr_block: 
             file_content += file_block_data
-            save_file("downloaded.txt", file_content)
             send_ack(client_socket, block_num)
+            print(f"ACK #{block_num} sent")
             curr_block += 1
         elif opcode == CODE_ERR:
             handle_error_packet(received_data)
@@ -82,7 +82,8 @@ def download_file(filename):
         if len(file_block_data) < 512:
             break
 
-    print(file_content) # TODO: Guardar archivo
+    save_file(filename, file_content)
+    print("File saved!")
 
 def write_file(filename, file_content):
     file_content_segments = math.ceil(len(file_content)/512) 
