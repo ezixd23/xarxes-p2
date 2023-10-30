@@ -3,6 +3,8 @@ import struct
 import sys
 import math
 
+import argparse
+
 CODE_RRQ = 1
 CODE_WRQ = 2
 CODE_DATA = 3
@@ -92,7 +94,7 @@ def write_file(filename, file_content):
 
     curr_block = 0
     is_first = True
-    while curr_block <= file_content_segments:
+    while curr_block < file_content_segments:
         opcode, block_num, isfake = 0, 0, False
         try:
             received_data, server_address = client_socket.recvfrom(516) # esperamos respuesta del servidor
@@ -124,7 +126,25 @@ def read_file(filename):
     file.close()
     return content
 
-#download_file("data.txt")
-file_content = read_file("data.txt")
-write_file("example.txt", file_content)
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="TFTP Client")
+    
+    parser.add_argument("operation", type=str, help="r=Read w=Write")
+    parser.add_argument("filename", type=str, help="The name of the file to read/write")
+    parser.add_argument("--port", "-p", help="Port the server is listening default: 6969")
+
+    args = parser.parse_args()
+
+    if args.port:
+        IP = "127.0.0.1:" + port
+
+    if args.operation == "r":
+        download_file(args.filename)
+    elif args.operation == "w":
+        file_content = read_file(args.filename)
+        write_file("c_" + args.filename, file_content)
+    else:
+        print("ERROR: operation must be r=Read or w=Write")
+        print("")
+        parser.print_help()
